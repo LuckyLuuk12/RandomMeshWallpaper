@@ -1,0 +1,32 @@
+{
+  "title": "Random Rainbow Mesh",
+  "type": "web",
+  "description": "Colorful triangle mesh background without particles.",
+  "file": "index.html",
+  "preview": "preview.png",
+  "author": "Luuk Kablan",
+  "releaseDate": "2025-06-30",
+  "general": {
+    "properties": {
+      "backgroundcolor": { "key": "backgroundcolor", "text": "Background Color", "type": "color", "value": "#06040e", "order": 1 },
+      "curvestrength": { "key": "curvestrength", "text": "Curve Strength", "type": "slider", "value": 100, "min": 0, "max": 200, "order": 2 },
+      "leftmaxheight": { "key": "leftmaxheight", "text": "Left Max Height", "type": "slider", "value": 1, "min": 0.0, "max": 1.0, "order": 3 },
+      "middlemaxheight": { "key": "middlemaxheight", "text": "Middle Max Height", "type": "slider", "value": 0.2, "min": 0.0, "max": 1.0, "order": 4 },
+      "rightmaxheight": { "key": "rightmaxheight", "text": "Right Max Height", "type": "slider", "value": 1, "min": 0.0, "max": 1.0, "order": 5 },
+      "maxedgewidthdistance": { "key": "maxedgewidthdistance", "text": "Max Edge Width Distance", "type": "slider", "value": 200, "min": 0, "max": 10000, "order": 6 },
+      "maxedgeheightdistance": { "key": "maxedgeheightdistance", "text": "Max Edge Height Distance", "type": "slider", "value": 200, "min": 0, "max": 10000, "order": 7 },
+      "maxneighbors": { "key": "maxneighbors", "text": "Max Neighbors", "type": "slider", "value": 4, "min": 1, "max": 40, "order": 8 },
+      "removalthreshold": { "key": "removalthreshold", "text": "Removal Threshold", "type": "slider", "value": 3, "min": 0, "max": 20, "order": 9 },
+      "planeminopacity": { "key": "planeminopacity", "text": "Plane Min Opacity", "type": "slider", "value": 0.001, "min": 0.0, "max": 1.0, "order": 10 },
+      "planemaxopacity": { "key": "planemaxopacity", "text": "Plane Max Opacity", "type": "slider", "value": 0.0075, "min": 0.0, "max": 1.0, "order": 11 },
+      "lineminopacity": { "key": "lineminopacity", "text": "Line Min Opacity", "type": "slider", "value": 0.001, "min": 0.0, "max": 1.0, "order": 12 },
+      "linemaxopacity": { "key": "linemaxopacity", "text": "Line Max Opacity", "type": "slider", "value": 0.03, "min": 0.0, "max": 1.0, "order": 13 },
+      "linewidth": { "key": "linewidth", "text": "Line Width", "type": "slider", "value": 1, "min": 0, "max": 50, "order": 14 },
+      "dotcount": { "key": "dotcount", "text": "Dot Count", "type": "slider", "value": 500, "min": 50, "max": 2000, "order": 15 },
+      "dotsize": { "key": "dotsize", "text": "Dot Size", "type": "slider", "value": 2, "min": 1, "max": 10, "order": 16 },
+      "dotopacity": { "key": "dotopacity", "text": "Dot Opacity", "type": "slider", "value": 0.2, "min": 0.0, "max": 1.0, "order": 17 },
+      "spikeamplitude": { "key": "spikeamplitude", "text": "Spike Amplitude", "type": "slider", "value": 0.1, "min": 0.0, "max": 1.0, "order": 18 },
+      "spikefrequency": { "key": "spikefrequency", "text": "Spike Frequency", "type": "slider", "value": 800, "min": 0, "max": 2000, "order": 19 }
+    }
+  }
+}
