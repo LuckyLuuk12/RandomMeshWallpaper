@@ -6,6 +6,7 @@
 </head>
 <style>
   body, html, canvas {
+    position: relative;
     box-sizing: border-box;
     margin: 0;
     padding: 0;
@@ -15,9 +16,15 @@
     scrollbar-width: none;
     overflow: hidden;
   }
+  #clock {
+    position: absolute;
+    font-weight: bold;
+    z-index: 1000;
+  }
 </style>
 <body>
   <canvas id="wallpaper"></canvas>
+  <div id="clock"></div>
 </body>
 <!--<script src="https://cdn.jsdelivr.net/npm/d3-delaunay@6/dist/d3-delaunay.min.js"></script>-->
 <script src="main.js"></script>

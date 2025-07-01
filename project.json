@@ -26,7 +26,17 @@
       "dotsize": { "key": "dotsize", "text": "Dot Size", "type": "slider", "value": 2, "min": 1, "max": 10, "order": 16 },
       "dotopacity": { "key": "dotopacity", "text": "Dot Opacity", "type": "slider", "value": 0.2, "min": 0.0, "max": 1.0, "order": 17 },
       "spikeamplitude": { "key": "spikeamplitude", "text": "Spike Amplitude", "type": "slider", "value": 0.1, "min": 0.0, "max": 1.0, "order": 18 },
-      "spikefrequency": { "key": "spikefrequency", "text": "Spike Frequency", "type": "slider", "value": 800, "min": 0, "max": 2000, "order": 19 }
+      "spikefrequency": { "key": "spikefrequency", "text": "Spike Frequency", "type": "slider", "value": 800, "min": 0, "max": 2000, "order": 19 },
+      "animationamplitude": { "key": "animationamplitude", "text": "Animation Amplitude", "type": "slider", "value": 3, "min": 0, "max": 20, "order": 20 },
+      "framerate": { "key": "framerate", "text": "Frame Rate (ms)", "type": "slider", "value": 1, "min": 1, "max": 1000, "order": 21 },
+      "clockposition": { "key": "clockposition", "text": "Clock Position", "type": "dropdown", "value": "center", "options": ["none","left","center","right","top-left","top","top-right","bottom-left","bottom","bottom-right"], "order": 22 },
+      "clockformat": { "key": "clockformat", "text": "Clock Format", "type": "text", "value": "HH:mm", "order": 23 },
+      "clockoutline": { "key": "clockoutline", "text": "Clock Outline", "type": "color", "value": "#f0f0f01f", "order": 24 },
+      "clockcolor": { "key": "clockcolor", "text": "Clock Color", "type": "text", "value": "clip", "order": 25 },
+      "clockopacity": { "key": "clockopacity", "text": "Clock Opacity", "type": "slider", "value": 0.5, "min": 0, "max": 1, "order": 26 },
+      "clockpadding": { "key": "clockpadding", "text": "Clock Padding", "type": "slider", "value": 10, "min": 0, "max": 100, "order": 27 },
+      "clockfontsize": { "key": "clockfontsize", "text": "Clock Font Size", "type": "text", "value": "100px", "order": 28 },
+      "clockfont": { "key": "clockfont", "text": "Clock Font", "type": "text", "value": "'monospace', monospace", "order": 29 }
     }
   }
 }
