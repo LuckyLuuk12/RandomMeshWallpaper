@@ -29,14 +29,32 @@
       "spikefrequency": { "key": "spikefrequency", "text": "Spike Frequency", "type": "slider", "value": 800, "min": 0, "max": 2000, "order": 19 },
       "animationamplitude": { "key": "animationamplitude", "text": "Animation Amplitude", "type": "slider", "value": 3, "min": 0, "max": 20, "order": 20 },
       "framerate": { "key": "framerate", "text": "Frame Rate (ms)", "type": "slider", "value": 1, "min": 1, "max": 1000, "order": 21 },
-      "clockposition": { "key": "clockposition", "text": "Clock Position", "type": "dropdown", "value": "center", "options": ["none","left","center","right","top-left","top","top-right","bottom-left","bottom","bottom-right"], "order": 22 },
-      "clockformat": { "key": "clockformat", "text": "Clock Format", "type": "text", "value": "HH:mm", "order": 23 },
+      "clockposition": {
+        "key": "clockposition",
+        "text": "Clock Position",
+        "type": "combo",
+        "value": "center",
+        "options": [
+          { "label": "None", "value": "none" },
+          { "label": "Left", "value": "left" },
+          { "label": "Center", "value": "center" },
+          { "label": "Right", "value": "right" },
+          { "label": "Top Left", "value": "top-left" },
+          { "label": "Top", "value": "top" },
+          { "label": "Top Right", "value": "top-right" },
+          { "label": "Bottom Left", "value": "bottom-left" },
+          { "label": "Bottom", "value": "bottom" },
+          { "label": "Bottom Right", "value": "bottom-right" }
+        ],
+        "order": 22
+      },
+      "clockformat": { "key": "clockformat", "text": "Clock Format", "type": "textinput", "value": "HH:mm", "order": 23 },
       "clockoutline": { "key": "clockoutline", "text": "Clock Outline", "type": "color", "value": "#f0f0f01f", "order": 24 },
-      "clockcolor": { "key": "clockcolor", "text": "Clock Color", "type": "text", "value": "clip", "order": 25 },
+      "clockcolor": { "key": "clockcolor", "text": "Clock Color", "type": "textinput", "value": "clip", "order": 25 },
       "clockopacity": { "key": "clockopacity", "text": "Clock Opacity", "type": "slider", "value": 0.5, "min": 0, "max": 1, "order": 26 },
       "clockpadding": { "key": "clockpadding", "text": "Clock Padding", "type": "slider", "value": 10, "min": 0, "max": 100, "order": 27 },
-      "clockfontsize": { "key": "clockfontsize", "text": "Clock Font Size", "type": "text", "value": "100px", "order": 28 },
-      "clockfont": { "key": "clockfont", "text": "Clock Font", "type": "text", "value": "'monospace', monospace", "order": 29 }
+      "clockfontsize": { "key": "clockfontsize", "text": "Clock Font Size", "type": "textinput", "value": "100px", "order": 28 },
+      "clockfont": { "key": "clockfont", "text": "Clock Font", "type": "textinput", "value": "'monospace', monospace", "order": 29 }
     }
   }
 }
