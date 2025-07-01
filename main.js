@@ -320,5 +320,6 @@ window.wallpaperPropertyListener = {
     if (properties.clockfontsize) config.clockFontSize = properties.clockfontsize.value;
     if (properties.clockfont) config.clockFont = properties.clockfont.value;
     draw();
+    restart = true; // Restart to apply new properties
   }
 };
