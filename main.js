@@ -4,26 +4,26 @@ const ctx = canvas.getContext("2d");
 
 let config = {
   backgroundColor: "#050206",
-  curveStrength: 100, // 1 = linear, >1 = more U-shaped, <1 = flatter
+  curveStrength: 200, // 1 = linear, >1 = more U-shaped, <1 = flatter
   leftMaxHeight: 1,
-  middleMaxHeight: 0.2,
+  middleMaxHeight: 0.3,
   rightMaxHeight: 1,
   maxEdgeWidthDistance: 200,
   maxEdgeHeightDistance: 200,
-  maxNeighbors: 4,
-  removalThreshold: 3,
+  maxNeighbors: 7,
+  removalThreshold: 20,
   planeMinOpacity: 0.001,
-  planeMaxOpacity: 0.0075,
+  planeMaxOpacity: 0.0095,
   lineMinOpacity: 0.001,
-  lineMaxOpacity: 0.03,
+  lineMaxOpacity: 0.05,
   lineWidth: 1,
-  dotCount: 500,
-  dotSize: 2,
+  dotCount: 400,
+  dotSize: 1,
   dotOpacity: 0.2,
-  spikeAmplitude: 0.1,
-  spikeFrequency: 800,
-  frameRate: 1,
-  animationAmplitude: 3,
+  spikeAmplitude: 0.05,
+  spikeFrequency: 2000,
+  frameRate: 30,
+  animationAmplitude: 8,
   /// "left", "center", "right", "top-left", "top", "top-right", "bottom-left", "bottom", "bottom-right"
   clockPosition: "none",
   clockFormat: "HH:mm", // "HH:mm:ss" or "MM/DD/YYYY HH:mm:ss"
@@ -31,7 +31,7 @@ let config = {
   clockColor: "clip", // "clip" or a color in string format, clip will use a rainbow gradient
   clockOpacity: 0.5, // Opacity for the clock text
   clockPadding: 10, // Padding in pixels
-  clockFontSize: "100px", // Font size for the clock
+  clockFontSize: "500px", // Font size for the clock
   clockFont: "'monospace', monospace", // Font family for the clock
 };
 
@@ -179,11 +179,27 @@ function drawShapes() {
   }
 }
 
+const SINE_TABLE_SIZE = 8192;
+const TWO_PI = Math.PI * 2;
+const SIN_TABLE = new Float32Array(SINE_TABLE_SIZE);
+
+for (let i = 0; i < SINE_TABLE_SIZE; i++) {
+  SIN_TABLE[i] = Math.sin((i / SINE_TABLE_SIZE) * TWO_PI);
+}
+
+function fastSin(x) {
+  // Map x to [0, TWO_PI) and scale to index
+  const wrapped = ((x % TWO_PI) + TWO_PI) % TWO_PI;
+  const index = Math.floor(wrapped / TWO_PI * SINE_TABLE_SIZE);
+  return SIN_TABLE[index];
+}
+
 function animateDots(time) {
-  // Animate each dot's y position with a slow sine wave
+  const base = time / 1000;
   for (let i = 0; i < dots.length; i++) {
-    let dot = dots[i];
-    dot.animatedY = dot.y + Math.sin(time / 1000 + i) * config.animationAmplitude;
+    const dot = dots[i];
+    const wave = fastSin(base + i);
+    dot.animatedY = dot.y + wave * config.animationAmplitude;
   }
 }
 
@@ -198,10 +214,10 @@ function draw() {
 
 // Animation loop
 let lastTime = null;
+// Just a safeguard to prevent overflow and use memory allocations efficiently
+const MODULO = 1_000_000_000;
 
 async function loop(time) {
-  // Just a safeguard to prevent overflow and use memory allocations efficiently
-  const MODULO = 1_000_000_000;
   time = time % MODULO;
   if (lastTime !== null) lastTime = lastTime % MODULO;
 
@@ -210,8 +226,7 @@ async function loop(time) {
     connectDots();
     restart = false;
   }
-  if (lastTime == null || time - lastTime >= config.frameRate) {
-    console.log(Math.floor(time/1000) + " | d: " + dots.length + " l: " + lines.length + " s: " + shapes.length);
+  if (lastTime == null || time - lastTime >= 1000 / config.frameRate) {
     animateDots(time);
     draw();
     lastTime = time;
@@ -233,55 +248,61 @@ function formatDate(date, format) {
     .replace(/ss/g, pad(date.getSeconds()))
     .replace(/SSS/g, pad(date.getMilliseconds(), 3));
 }
+
+// Positioning logic
+const positions = {
+  "left": { top: `50%`, left: `${config.clockPadding}px`, transform: `translateY(-50%)` },
+  "center": { top: `50%`, left: `50%`, transform: `translate(-50%, -50%)` },
+  "right": { top: `50%`, right: `${config.clockPadding}px`, transform: `translateY(-50%)` },
+  "top-left": { top: `${config.clockPadding}px`, left: `${config.clockPadding}px` },
+  "top": { top: `${config.clockPadding}px`, left: `50%`, transform: `translateX(-50%)` },
+  "top-right": { top: `${config.clockPadding}px`, right: `${config.clockPadding}px` },
+  "bottom-left": { bottom: `${config.clockPadding}px`, left: `${config.clockPadding}px` },
+  "bottom": { bottom: `${config.clockPadding}px`, left: `50%`, transform: `translateX(-50%)` },
+  "bottom-right": { bottom: `${config.clockPadding}px`, right: `${config.clockPadding}px` },
+  "none": { display: "none" } // Special case for no clock
+};
+
 /**
  * Uses the <div id=clock> element to display the current time.
  * positioned based on the config.clockPosition value using absolute positioning and px padding from edges
  */
+
+let clockNeedsUpdate = true;
 async function drawClock() {
-  if (config.clockPosition === "none") {
+  if (config.clockPosition === "none" || config.clockOpacity <= 0) {
     clock.style.display = "none";
     return;
   }
-  clock.style.display = "block";
-  clock.style.position = "absolute";
-  clock.style.webkitTextStroke = config.clockOutline && config.clockOutline !== 'none' ? `1px ${config.clockOutline}` : null;
-  clock.style.fontFamily = config.clockFont;
-  clock.style.padding = `${config.clockPadding}px`;
-  clock.style.fontSize = config.clockFontSize;
   clock.innerHTML = formatDate(new Date(), config.clockFormat);
+  if(clockNeedsUpdate) {
+    clock.style.display = "block";
+    clock.style.position = "absolute";
+    clock.style.webkitTextStroke = config.clockOutline && config.clockOutline !== 'none' ? `1px ${config.clockOutline}` : null;
+    clock.style.fontFamily = config.clockFont;
+    clock.style.padding = `${config.clockPadding}px`;
+    clock.style.fontSize = config.clockFontSize;
 
-  // If clockColor is set to "clip", use a rainbow gradient using the rainbow color function with the x position of the clock
-  if (config.clockColor === "clip") {
-    const x = clock.offsetLeft + clock.offsetWidth / 2; // Get the horizontal center of the clock
-    const opacity = config.clockOpacity || 1; // Use the clockOpacity config value
-    /// 5% width offset to left and right for a wider gradient, between 0 and maxWidth of the screen ofc
-    const left = Math.max(0, x - clock.offsetWidth * 1.6);
-    const right = Math.min(page.width, x + clock.offsetWidth * 1.6);
-    const middle = (left + right) / 2;
-    clock.style.background = `linear-gradient(to right, 
+    // If clockColor is set to "clip", use a rainbow gradient using the rainbow color function with the x position of the clock
+    if (config.clockColor === "clip") {
+      const x = clock.offsetLeft + clock.offsetWidth / 2; // Get the horizontal center of the clock
+      const opacity = config.clockOpacity || 1; // Use the clockOpacity config value
+      /// 5% width offset to left and right for a wider gradient, between 0 and maxWidth of the screen ofc
+      const left = Math.max(0, x - clock.offsetWidth * 1.6);
+      const right = Math.min(page.width, x + clock.offsetWidth * 1.6);
+      const middle = (left + right) / 2;
+      clock.style.background = `linear-gradient(to right, 
                                                 ${getRainbowColor(left, opacity)}, 
                                                 ${getRainbowColor(middle, opacity)}, 
                                                 ${getRainbowColor(right, opacity)})`;
-    clock.style.webkitBackgroundClip = "text";
-    clock.style.color = "transparent"; // Make text transparent to show gradient
-  } else {
-    clock.style.color = config.clockColor;
+      clock.style.webkitBackgroundClip = "text";
+      clock.style.color = "transparent"; // Make text transparent to show gradient
+    } else {
+      clock.style.color = config.clockColor;
+    }
+    Object.assign(clock.style, positions[config.clockPosition]);
+    clockNeedsUpdate = false; // Reset update flag
   }
-
-  // Positioning logic
-  const positions = {
-    "left": { top: `50%`, left: `${config.clockPadding}px`, transform: `translateY(-50%)` },
-    "center": { top: `50%`, left: `50%`, transform: `translate(-50%, -50%)` },
-    "right": { top: `50%`, right: `${config.clockPadding}px`, transform: `translateY(-50%)` },
-    "top-left": { top: `${config.clockPadding}px`, left: `${config.clockPadding}px` },
-    "top": { top: `${config.clockPadding}px`, left: `50%`, transform: `translateX(-50%)` },
-    "top-right": { top: `${config.clockPadding}px`, right: `${config.clockPadding}px` },
-    "bottom-left": { bottom: `${config.clockPadding}px`, left: `${config.clockPadding}px` },
-    "bottom": { bottom: `${config.clockPadding}px`, left: `50%`, transform: `translateX(-50%)` },
-    "bottom-right": { bottom: `${config.clockPadding}px`, right: `${config.clockPadding}px` },
-    "none": { display: "none" } // Special case for no clock
-  };
-  Object.assign(clock.style, positions[config.clockPosition]);
   requestAnimationFrame(drawClock);
 }
 // Call drawClock initially to set the clock position
@@ -319,7 +340,8 @@ window.wallpaperPropertyListener = {
     if (properties.clockpadding) config.clockPadding = properties.clockpadding.value;
     if (properties.clockfontsize) config.clockFontSize = properties.clockfontsize.value;
     if (properties.clockfont) config.clockFont = properties.clockfont.value;
-    draw();
     restart = true; // Restart to apply new properties
+    clockNeedsUpdate = true; // Force clock to update its style
+    draw();
   }
 };
