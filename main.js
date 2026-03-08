@@ -2,6 +2,16 @@ const canvas = document.querySelector("canvas");
 const clock = document.getElementById("clock");
 const ctx = canvas.getContext("2d");
 
+/**
+ * Performance Optimizations:
+ * - Shapes, lines, and colors are cached and only regenerated on restart
+ * - Only Y-positions are animated (not X), reducing calculations
+ * - Pre-computed sine table (fastSin) for wave calculations
+ * - Canvas context loss recovery handlers prevent crashes
+ * - Clock updates are throttled and only modify DOM when text changes
+ * - All performance options (dotCount, maxNeighbors, frameRate) are user-configurable
+ */
+
 let config = {
   backgroundColor: "#050206",
   curveStrength: 200, // 1 = linear, >1 = more U-shaped, <1 = flatter
@@ -24,6 +34,7 @@ let config = {
   spikeFrequency: 2000,
   frameRate: 30,
   animationAmplitude: 8,
+  animationRandomness: 0.3, // 0 = fully deterministic, 1 = max randomness added to wave
   /// "left", "center", "right", "top-left", "top", "top-right", "bottom-left", "bottom", "bottom-right"
   clockPosition: "none",
   clockFormat: "HH:mm", // "HH:mm:ss" or "MM/DD/YYYY HH:mm:ss"
@@ -31,7 +42,7 @@ let config = {
   clockColor: "clip", // "clip" or a color in string format, clip will use a rainbow gradient
   clockOpacity: 0.5, // Opacity for the clock text
   clockPadding: 10, // Padding in pixels
-  clockFontSize: "500px", // Font size for the clock
+  clockFontSize: "100px", // Font size for the clock
   clockFont: "'monospace', monospace", // Font family for the clock
 };
 
@@ -56,6 +67,16 @@ function resizeCanvas() {
 }
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
+
+// Handle canvas context loss (helps prevent crashes in Wallpaper Engine)
+canvas.addEventListener('contextlost', (e) => {
+  e.preventDefault();
+  console.warn('Canvas context lost, will recover on restore');
+});
+canvas.addEventListener('contextrestored', () => {
+  console.log('Canvas context restored, regenerating scene');
+  restart = true;
+});
 
 function lerp(a, b, t) {
   return a + (b - a) * t;
@@ -104,7 +125,15 @@ function generateDots() {
   for (const x of xs) {
     const yMin = uShapeY(x);
     const y = yMin + Math.random() * (page.height - yMin);
-    dots.push({ x, y, neighbors: [] });
+    dots.push({
+      x,
+      y,
+      neighbors: [],
+      // Random properties for undeterministic animation
+      randomDir: Math.random() < 0.5 ? -1 : 1,
+      randomPhase: Math.random() * Math.PI * 2,
+      randomSpeed: 0.5 + Math.random() * 1.5 // Speed multiplier between 0.5x and 2x
+    });
   }
   return dots;
 }
@@ -113,6 +142,7 @@ function connectDots() {
   shapes = [];
   // Clear neighbors
   for (const dot of dots) dot.neighbors = [];
+  // Note: Colors and geometry are cached here and only recalculated on restart for performance
   // Build neighbors and lines
   for (let i = 0; i < dots.length; i++) {
     const a = dots[i];
@@ -122,7 +152,7 @@ function connectDots() {
       const dx = Math.abs(a.x - b.x);
       const dy = Math.abs(a.y - b.y);
       if (dx < config.maxEdgeWidthDistance && dy < config.maxEdgeHeightDistance) {
-        if(a.neighbors.length >= config.maxNeighbors || b.neighbors.length >= config.maxNeighbors) continue;
+        if (a.neighbors.length >= config.maxNeighbors || b.neighbors.length >= config.maxNeighbors) continue;
         a.neighbors.push(b);
         b.neighbors.push(a);
         // Store line with fixed color/opacity
@@ -198,8 +228,24 @@ function animateDots(time) {
   const base = time / 1000;
   for (let i = 0; i < dots.length; i++) {
     const dot = dots[i];
+
+    // Deterministic wave component
     const wave = fastSin(base + i);
-    dot.animatedY = dot.y + wave * config.animationAmplitude;
+    let offsetY = wave * config.animationAmplitude;
+
+    // Add bounded random component if enabled
+    if (config.animationRandomness > 0) {
+      // Each dot has its own random phase, speed, and direction
+      const randomWave = fastSin(base * dot.randomSpeed + dot.randomPhase);
+      const randomOffset = randomWave * dot.randomDir * config.animationAmplitude * config.animationRandomness;
+      offsetY += randomOffset;
+    }
+
+    dot.animatedY = dot.y + offsetY;
+
+    // Clamp to valid range (respect the curve configuration)
+    const yMin = uShapeY(dot.x);
+    dot.animatedY = Math.max(yMin, Math.min(page.height, dot.animatedY));
   }
 }
 
@@ -266,16 +312,35 @@ const positions = {
 /**
  * Uses the <div id=clock> element to display the current time.
  * positioned based on the config.clockPosition value using absolute positioning and px padding from edges
+ * Optimized: Only updates text when it actually changes, throttled updates for performance
  */
 
 let clockNeedsUpdate = true;
+let lastClockText = '';
+let lastClockUpdate = 0;
+const CLOCK_UPDATE_INTERVAL = 100; // Update clock max every 100ms
+
 async function drawClock() {
   if (config.clockPosition === "none" || config.clockOpacity <= 0) {
     clock.style.display = "none";
     return;
   }
-  clock.innerHTML = formatDate(new Date(), config.clockFormat);
-  if(clockNeedsUpdate) {
+
+  // Throttle clock updates for performance
+  const now = performance.now();
+  if (now - lastClockUpdate < CLOCK_UPDATE_INTERVAL && !clockNeedsUpdate) {
+    requestAnimationFrame(drawClock);
+    return;
+  }
+
+  const newClockText = formatDate(new Date(), config.clockFormat);
+  // Only update DOM if text actually changed
+  if (newClockText !== lastClockText) {
+    clock.innerHTML = newClockText;
+    lastClockText = newClockText;
+    lastClockUpdate = now;
+  }
+  if (clockNeedsUpdate) {
     clock.style.display = "block";
     clock.style.position = "absolute";
     clock.style.webkitTextStroke = config.clockOutline && config.clockOutline !== 'none' ? `1px ${config.clockOutline}` : null;
@@ -310,7 +375,7 @@ requestAnimationFrame(drawClock);
 
 // Wallpaper Engine property listener
 window.wallpaperPropertyListener = {
-  applyUserProperties: function(properties) {
+  applyUserProperties: function (properties) {
     if (properties.backgroundcolor) config.backgroundColor = properties.backgroundcolor.value;
     if (properties.curvestrength) config.curveStrength = properties.curvestrength.value;
     if (properties.leftmaxheight) config.leftMaxHeight = properties.leftmaxheight.value;
@@ -332,6 +397,7 @@ window.wallpaperPropertyListener = {
     if (properties.spikefrequency) config.spikeFrequency = properties.spikefrequency.value;
     if (properties.framerate) config.frameRate = properties.framerate.value;
     if (properties.animationamplitude) config.animationAmplitude = properties.animationamplitude.value;
+    if (properties.animationrandomness) config.animationRandomness = properties.animationrandomness.value;
     if (properties.clockposition) config.clockPosition = properties.clockposition.value;
     if (properties.clockformat) config.clockFormat = properties.clockformat.value;
     if (properties.clockoutline) config.clockOutline = properties.clockoutline.value;
