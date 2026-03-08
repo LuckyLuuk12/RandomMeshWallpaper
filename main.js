@@ -7,9 +7,13 @@ const ctx = canvas.getContext("2d");
  * - Shapes, lines, and colors are cached and only regenerated on restart
  * - Only Y-positions are animated (not X), reducing calculations
  * - Pre-computed sine table (fastSin) for wave calculations
- * - Canvas context loss recovery handlers prevent crashes
+ * - Canvas context loss recovery handlers prevent crashes and black screens
  * - Clock updates are throttled and only modify DOM when text changes
  * - All performance options (dotCount, maxNeighbors, frameRate) are user-configurable
+ * - FPS monitoring with automatic performance degradation under high GPU load
+ * - Intelligent performance modes: normal → reduced → paused based on FPS
+ * - Always draws at least one frame to prevent black screens
+ * - Automatically pauses when page is hidden (e.g., fullscreen gaming)
  */
 
 let config = {
@@ -56,6 +60,14 @@ let dots = [];
 let lines = [];
 let shapes = [];
 
+// Performance monitoring and auto-degradation
+let fpsHistory = [];
+let performanceMode = 'normal'; // 'normal', 'reduced', 'paused'
+let lastDrawnFrame = false;
+const FPS_HISTORY_SIZE = 60; // Track last 60 frames
+const LOW_FPS_THRESHOLD = 15; // Below this, reduce performance
+const CRITICAL_FPS_THRESHOLD = 5; // Below this, pause animation
+
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -76,6 +88,23 @@ canvas.addEventListener('contextlost', (e) => {
 canvas.addEventListener('contextrestored', () => {
   console.log('Canvas context restored, regenerating scene');
   restart = true;
+  performanceMode = 'normal'; // Reset performance mode
+  // Force immediate redraw to prevent black screen
+  if (dots.length > 0) {
+    draw();
+  }
+});
+
+// Pause animation when page is hidden (e.g., when gaming in fullscreen)
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    console.log('Page hidden, pausing animation to save GPU');
+    performanceMode = 'paused';
+  } else {
+    console.log('Page visible, resuming animation');
+    performanceMode = 'normal';
+    fpsHistory = []; // Reset FPS tracking
+  }
 });
 
 function lerp(a, b, t) {
@@ -253,15 +282,69 @@ function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = config.backgroundColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  drawDots();
-  drawLines();
-  drawShapes();
+
+  // Performance-based rendering
+  if (performanceMode === 'paused') {
+    // In paused mode, still draw dots/lines but skip shapes for minimal rendering
+    drawDots();
+    drawLines();
+  } else if (performanceMode === 'reduced') {
+    // Reduced mode: draw everything but animation is frozen
+    drawDots();
+    drawLines();
+    drawShapes();
+  } else {
+    // Normal mode: full rendering
+    drawDots();
+    drawLines();
+    drawShapes();
+  }
+
+  lastDrawnFrame = true;
 }
 
 // Animation loop
 let lastTime = null;
+let lastFpsCheck = null;
 // Just a safeguard to prevent overflow and use memory allocations efficiently
 const MODULO = 1_000_000_000;
+
+function monitorPerformance(currentTime) {
+  if (lastFpsCheck !== null) {
+    const delta = currentTime - lastFpsCheck;
+    if (delta > 0) {
+      const currentFps = 1000 / delta;
+      fpsHistory.push(currentFps);
+
+      // Keep history size manageable
+      if (fpsHistory.length > FPS_HISTORY_SIZE) {
+        fpsHistory.shift();
+      }
+
+      // Check average FPS over last 30 frames (0.5-1 second)
+      if (fpsHistory.length >= 30) {
+        const recentFps = fpsHistory.slice(-30);
+        const avgFps = recentFps.reduce((a, b) => a + b, 0) / recentFps.length;
+
+        // Auto-adjust performance mode based on FPS
+        if (avgFps < CRITICAL_FPS_THRESHOLD && performanceMode !== 'paused') {
+          console.warn(`Critical FPS (${avgFps.toFixed(1)}), pausing animation`);
+          performanceMode = 'paused';
+        } else if (avgFps < LOW_FPS_THRESHOLD && performanceMode === 'normal') {
+          console.warn(`Low FPS (${avgFps.toFixed(1)}), reducing performance`);
+          performanceMode = 'reduced';
+        } else if (avgFps > LOW_FPS_THRESHOLD * 1.5 && performanceMode === 'reduced') {
+          console.log(`FPS recovered (${avgFps.toFixed(1)}), resuming normal mode`);
+          performanceMode = 'normal';
+        } else if (avgFps > CRITICAL_FPS_THRESHOLD * 2 && performanceMode === 'paused') {
+          console.log(`FPS recovered (${avgFps.toFixed(1)}), resuming reduced mode`);
+          performanceMode = 'reduced';
+        }
+      }
+    }
+  }
+  lastFpsCheck = currentTime;
+}
 
 async function loop(time) {
   time = time % MODULO;
@@ -272,11 +355,21 @@ async function loop(time) {
     connectDots();
     restart = false;
   }
+
   if (lastTime == null || time - lastTime >= 1000 / config.frameRate) {
-    animateDots(time);
+    // Monitor performance to auto-adjust quality
+    monitorPerformance(time);
+
+    // Only animate if not in paused mode
+    if (performanceMode !== 'paused') {
+      animateDots(time);
+    }
+
+    // Always draw to prevent black screen (even if paused)
     draw();
     lastTime = time;
   }
+
   requestAnimationFrame(loop);
 }
 // Draw animated random rainbow mesh
@@ -408,6 +501,8 @@ window.wallpaperPropertyListener = {
     if (properties.clockfont) config.clockFont = properties.clockfont.value;
     restart = true; // Restart to apply new properties
     clockNeedsUpdate = true; // Force clock to update its style
+    performanceMode = 'normal'; // Reset performance mode when user changes settings
+    fpsHistory = []; // Clear FPS history
     draw();
   }
 };
