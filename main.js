@@ -1,19 +1,37 @@
 const canvas = document.querySelector("canvas");
 const clock = document.getElementById("clock");
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d", { willReadFrequently: false });
+
+// Create fallback overlay to prevent black screens
+const fallbackCanvas = document.createElement('canvas');
+const fallbackCtx = fallbackCanvas.getContext('2d', { willReadFrequently: false });
+fallbackCanvas.style.position = 'fixed';
+fallbackCanvas.style.top = '0';
+fallbackCanvas.style.left = '0';
+fallbackCanvas.style.pointerEvents = 'none';
+fallbackCanvas.style.zIndex = '-1';
+fallbackCanvas.style.display = 'none';
+document.body.appendChild(fallbackCanvas);
+
+let lastGoodFrame = null; // Store snapshot as ImageData
+let contextIsHealthy = true;
+let framesSinceSnapshot = 0;
+const SNAPSHOT_INTERVAL = 60; // Take snapshot every 60 frames (~2 seconds at 30fps)
 
 /**
- * Performance Optimizations:
+ * Performance Optimizations & Anti-Black-Screen System:
  * - Shapes, lines, and colors are cached and only regenerated on restart
  * - Only Y-positions are animated (not X), reducing calculations
  * - Pre-computed sine table (fastSin) for wave calculations
- * - Canvas context loss recovery handlers prevent crashes and black screens
+ * - Canvas context loss recovery with fallback frame system
+ * - Periodically captures snapshots of healthy frames
+ * - Displays last good frame when GPU context is lost (prevents black screens!)
  * - Clock updates are throttled and only modify DOM when text changes
  * - All performance options (dotCount, maxNeighbors, frameRate) are user-configurable
  * - FPS monitoring with automatic performance degradation under high GPU load
  * - Intelligent performance modes: normal → reduced → paused based on FPS
- * - Always draws at least one frame to prevent black screens
  * - Automatically pauses when page is hidden (e.g., fullscreen gaming)
+ * - Try/catch wrapped drawing with automatic fallback activation
  */
 
 let config = {
@@ -75,6 +93,9 @@ function resizeCanvas() {
     width: canvas.width,
     height: canvas.height * 1.1,
   };
+  // Resize fallback canvas too
+  fallbackCanvas.width = canvas.width;
+  fallbackCanvas.height = canvas.height;
   restart = true;
 }
 window.addEventListener("resize", resizeCanvas);
@@ -83,17 +104,62 @@ resizeCanvas();
 // Handle canvas context loss (helps prevent crashes in Wallpaper Engine)
 canvas.addEventListener('contextlost', (e) => {
   e.preventDefault();
-  console.warn('Canvas context lost, will recover on restore');
+  console.warn('Canvas context lost - activating fallback frame');
+  contextIsHealthy = false;
+  showFallbackFrame();
 });
+
 canvas.addEventListener('contextrestored', () => {
   console.log('Canvas context restored, regenerating scene');
+  contextIsHealthy = true;
   restart = true;
-  performanceMode = 'normal'; // Reset performance mode
-  // Force immediate redraw to prevent black screen
+  performanceMode = 'normal';
+  hideFallbackFrame();
+  // Force immediate redraw
   if (dots.length > 0) {
-    draw();
+    try {
+      draw();
+    } catch (e) {
+      console.error('Failed to draw after context restore:', e);
+    }
   }
 });
+
+function showFallbackFrame() {
+  if (lastGoodFrame && fallbackCanvas.width > 0 && fallbackCanvas.height > 0) {
+    try {
+      fallbackCtx.putImageData(lastGoodFrame, 0, 0);
+      fallbackCanvas.style.display = 'block';
+      canvas.style.display = 'none'; // Hide broken canvas
+      console.log('Fallback frame activated');
+    } catch (e) {
+      console.error('Failed to show fallback frame:', e);
+      // Last resort: just show background color
+      fallbackCtx.fillStyle = config.backgroundColor;
+      fallbackCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
+      fallbackCanvas.style.display = 'block';
+    }
+  }
+}
+
+function hideFallbackFrame() {
+  fallbackCanvas.style.display = 'none';
+  canvas.style.display = 'block';
+}
+
+function captureSnapshot() {
+  if (!contextIsHealthy) return;
+
+  try {
+    // Capture current frame as ImageData
+    lastGoodFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    framesSinceSnapshot = 0;
+  } catch (e) {
+    console.warn('Failed to capture snapshot:', e);
+    contextIsHealthy = false;
+    showFallbackFrame();
+  }
+}
 
 // Pause animation when page is hidden (e.g., when gaming in fullscreen)
 document.addEventListener('visibilitychange', () => {
@@ -103,9 +169,26 @@ document.addEventListener('visibilitychange', () => {
   } else {
     console.log('Page visible, resuming animation');
     performanceMode = 'normal';
-    fpsHistory = []; // Reset FPS tracking
+    fpsHistory = []; // Reset FPS tracking    
+    // Check if we need to recover from black screen 
+    if (!contextIsHealthy) {
+      console.log('Attempting to recover context...');
+      contextIsHealthy = true;
+      hideFallbackFrame();
+      restart = true;
+    }
   }
-});
+}
+);
+// Periodic health check - attempt recovery if stuck in fallback mode
+setInterval(() => {
+  if (!contextIsHealthy && fallbackCanvas.style.display !== 'none') {
+    console.log('Health check: attempting context recovery...');
+    contextIsHealthy = true;
+    hideFallbackFrame();
+    restart = true;
+  }
+}, 5000); // Check every 5 seconds
 
 function lerp(a, b, t) {
   return a + (b - a) * t;
@@ -279,28 +362,47 @@ function animateDots(time) {
 }
 
 function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = config.backgroundColor;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Performance-based rendering
-  if (performanceMode === 'paused') {
-    // In paused mode, still draw dots/lines but skip shapes for minimal rendering
-    drawDots();
-    drawLines();
-  } else if (performanceMode === 'reduced') {
-    // Reduced mode: draw everything but animation is frozen
-    drawDots();
-    drawLines();
-    drawShapes();
-  } else {
-    // Normal mode: full rendering
-    drawDots();
-    drawLines();
-    drawShapes();
+  // Safety check: verify context is available
+  if (!ctx || !contextIsHealthy) {
+    console.warn('Context unavailable, using fallback');
+    showFallbackFrame();
+    return;
   }
 
-  lastDrawnFrame = true;
+  try {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = config.backgroundColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Performance-based rendering
+    if (performanceMode === 'paused') {
+      // In paused mode, still draw dots/lines but skip shapes for minimal rendering
+      drawDots();
+      drawLines();
+    } else if (performanceMode === 'reduced') {
+      // Reduced mode: draw everything but animation is frozen
+      drawDots();
+      drawLines();
+      drawShapes();
+    } else {
+      // Normal mode: full rendering
+      drawDots();
+      drawLines();
+      drawShapes();
+    }
+
+    lastDrawnFrame = true;
+
+    // Periodically capture snapshot for fallback
+    framesSinceSnapshot++;
+    if (framesSinceSnapshot >= SNAPSHOT_INTERVAL) {
+      captureSnapshot();
+    }
+  } catch (e) {
+    console.error('Draw failed:', e);
+    contextIsHealthy = false;
+    showFallbackFrame();
+  }
 }
 
 // Animation loop
@@ -360,12 +462,12 @@ async function loop(time) {
     // Monitor performance to auto-adjust quality
     monitorPerformance(time);
 
-    // Only animate if not in paused mode
-    if (performanceMode !== 'paused') {
+    // Only animate if not in paused mode and context is healthy
+    if (performanceMode !== 'paused' && contextIsHealthy) {
       animateDots(time);
     }
 
-    // Always draw to prevent black screen (even if paused)
+    // Always try to draw (will use fallback if context lost)
     draw();
     lastTime = time;
   }
@@ -374,6 +476,14 @@ async function loop(time) {
 }
 // Draw animated random rainbow mesh
 requestAnimationFrame(loop);
+
+// Capture initial good frame after a short delay (ensures first render is complete)
+setTimeout(() => {
+  if (contextIsHealthy && dots.length > 0) {
+    captureSnapshot();
+    console.log('Initial fallback frame captured');
+  }
+}, 500);
 
 
 function formatDate(date, format) {
@@ -503,6 +613,12 @@ window.wallpaperPropertyListener = {
     clockNeedsUpdate = true; // Force clock to update its style
     performanceMode = 'normal'; // Reset performance mode when user changes settings
     fpsHistory = []; // Clear FPS history
+    // Try to recover if in fallback mode
+    if (!contextIsHealthy) {
+      console.log('Settings changed, attempting context recovery...');
+      contextIsHealthy = true;
+      hideFallbackFrame();
+    }
     draw();
   }
 };
