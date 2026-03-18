@@ -35,7 +35,7 @@ const SNAPSHOT_INTERVAL = 60; // Take snapshot every 60 frames (~2 seconds at 30
  */
 
 let config = {
-  backgroundColor: "#050206",
+  backgroundColor: "#000000",
   curveStrength: 200, // 1 = linear, >1 = more U-shaped, <1 = flatter
   leftMaxHeight: 1,
   middleMaxHeight: 0.3,
@@ -86,6 +86,53 @@ const FPS_HISTORY_SIZE = 60; // Track last 60 frames
 const LOW_FPS_THRESHOLD = 15; // Below this, reduce performance
 const CRITICAL_FPS_THRESHOLD = 5; // Below this, pause animation
 
+function normalizeColorValue(value) {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return "#000000";
+
+    // Wallpaper Engine can provide colors as normalized channels: "r g b" or "r g b a".
+    if (trimmed.includes(" ")) {
+      const parts = trimmed.split(/\s+/).map(Number).filter((n) => Number.isFinite(n));
+      if (parts.length >= 3) {
+        const toChannel = (n) => Math.max(0, Math.min(255, Math.round(n * 255)));
+        const r = toChannel(parts[0]);
+        const g = toChannel(parts[1]);
+        const b = toChannel(parts[2]);
+        const a = parts[3];
+        if (Number.isFinite(a)) {
+          return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, a))})`;
+        }
+        return `rgb(${r}, ${g}, ${b})`;
+      }
+    }
+    return trimmed;
+  }
+
+  if (Array.isArray(value) && value.length >= 3) {
+    const toChannel = (n) => Math.max(0, Math.min(255, Math.round(Number(n) * 255)));
+    const r = toChannel(value[0]);
+    const g = toChannel(value[1]);
+    const b = toChannel(value[2]);
+    const a = Number(value[3]);
+    if (Number.isFinite(a)) {
+      return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, a))})`;
+    }
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  return "#000000";
+}
+
+function applyBackgroundColor(rawValue) {
+  const color = normalizeColorValue(rawValue);
+  config.backgroundColor = color;
+
+  // Keep page background in sync to avoid visible black flashes if canvas fallback engages.
+  document.documentElement.style.backgroundColor = color;
+  document.body.style.backgroundColor = color;
+}
+
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -100,6 +147,7 @@ function resizeCanvas() {
 }
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
+applyBackgroundColor(config.backgroundColor);
 
 // Handle canvas context loss (helps prevent crashes in Wallpaper Engine)
 canvas.addEventListener('contextlost', (e) => {
@@ -579,7 +627,7 @@ requestAnimationFrame(drawClock);
 // Wallpaper Engine property listener
 window.wallpaperPropertyListener = {
   applyUserProperties: function (properties) {
-    if (properties.backgroundcolor) config.backgroundColor = properties.backgroundcolor.value;
+    if (properties.backgroundcolor) applyBackgroundColor(properties.backgroundcolor.value);
     if (properties.curvestrength) config.curveStrength = properties.curvestrength.value;
     if (properties.leftmaxheight) config.leftMaxHeight = properties.leftmaxheight.value;
     if (properties.middlemaxheight) config.middleMaxHeight = properties.middlemaxheight.value;

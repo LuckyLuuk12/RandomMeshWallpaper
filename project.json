@@ -12,7 +12,7 @@
         "key": "backgroundcolor",
         "text": "Background Color",
         "type": "color",
-        "value": "#050206",
+        "value": "#000000",
         "order": 1
       },
       "curvestrength": {
